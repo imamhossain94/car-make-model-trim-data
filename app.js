@@ -13,7 +13,9 @@ async function init() {
 
         setupTheme();
         initUI();
+        initMobileDrawer();
         setupFilters();
+        setupResetFilters();
 
         // Initial setup
         applyFilters();
@@ -25,35 +27,36 @@ async function init() {
 
 // --- THEME ---
 function setupTheme() {
-    const btn = document.getElementById('theme-btn');
     const html = document.documentElement;
-    const icon = document.getElementById('theme-icon');
-
     const saved = localStorage.getItem('theme') || 'dark';
     html.setAttribute('data-theme', saved);
     updateThemeIcon(saved);
 
-    btn.onclick = () => {
+    const toggleHandler = () => {
         const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
         html.setAttribute('data-theme', next);
         localStorage.setItem('theme', next);
         updateThemeIcon(next);
     };
+
+    const desktopBtn = document.getElementById('theme-btn');
+    if (desktopBtn) desktopBtn.onclick = toggleHandler;
+
+    const headerBtn = document.getElementById('header-theme-btn');
+    if (headerBtn) headerBtn.onclick = toggleHandler;
 }
 
 function updateThemeIcon(theme) {
-    const icon = document.getElementById('theme-icon');
-    if (theme === 'dark') {
-        icon.setAttribute('data-lucide', 'moon');
-    } else {
-        icon.setAttribute('data-lucide', 'sun');
-    }
+    document.querySelectorAll('.theme-toggle .theme-icon').forEach(icon => {
+        icon.setAttribute('data-lucide', theme === 'dark' ? 'moon' : 'sun');
+    });
     lucide.createIcons();
 }
 
 // --- UI SETUP ---
 function initUI() {
     lucide.createIcons();
+
     // Populate simple make select
     const makeSelect = document.getElementById('make-select');
     carIndex.sort((a, b) => a.n.localeCompare(b.n)).forEach(make => {
@@ -68,23 +71,87 @@ function initUI() {
         maxS.add(new Option(y, y));
     }
 
-    // Nav Logic
-    document.querySelectorAll('.nav-btn').forEach(btn => {
+    // View Navigation Logic (Synchronized between sidebar and header)
+    document.querySelectorAll('.nav-btn[data-view]').forEach(btn => {
         btn.onclick = () => {
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
-            const target = btn.dataset.view;
-            document.querySelectorAll('.view-content').forEach(v => v.classList.add('hidden'));
-            document.getElementById(target).classList.remove('hidden');
-
-            currentView = target;
-            if (currentView === 'tree-view') renderTreeView();
-            else renderCurrentView();
+            switchView(btn.dataset.view);
+            // If on mobile and clicked inside sidebar, close drawer smoothly
+            if (window.innerWidth <= 960 && btn.closest('aside')) {
+                closeMobileDrawer();
+            }
         };
     });
 
-    document.getElementById('close-modal').onclick = () => document.getElementById('detail-modal').classList.remove('active');
+    // Close Modal setup
+    const modal = document.getElementById('detail-modal');
+    document.getElementById('close-modal').onclick = () => closeModal();
+    modal.onclick = (e) => {
+        if (e.target === modal) closeModal();
+    };
+
+    // Keyboard navigation (Escape key to close modal or drawer)
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (modal.classList.contains('active')) {
+                closeModal();
+            } else {
+                closeMobileDrawer();
+            }
+        }
+    });
+}
+
+function switchView(targetView) {
+    currentView = targetView;
+
+    // Update active class on all nav buttons (sidebar + header segmented control)
+    document.querySelectorAll('.nav-btn[data-view]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === targetView);
+    });
+
+    // Toggle view content visibility
+    document.querySelectorAll('.view-content').forEach(v => {
+        v.classList.toggle('hidden', v.id !== targetView);
+    });
+
+    if (currentView === 'tree-view') renderTreeView();
+    else renderCurrentView();
+}
+
+function closeModal() {
+    const modal = document.getElementById('detail-modal');
+    modal.classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+// --- MOBILE DRAWER ---
+function initMobileDrawer() {
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    const openBtn = document.getElementById('mobile-filter-btn');
+    const closeBtn = document.getElementById('sidebar-close-btn');
+    const applyBtn = document.getElementById('apply-filters-btn');
+
+    if (openBtn) openBtn.onclick = openMobileDrawer;
+    if (closeBtn) closeBtn.onclick = closeMobileDrawer;
+    if (backdrop) backdrop.onclick = closeMobileDrawer;
+    if (applyBtn) applyBtn.onclick = closeMobileDrawer;
+}
+
+function openMobileDrawer() {
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (sidebar) sidebar.classList.add('open');
+    if (backdrop) backdrop.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMobileDrawer() {
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (sidebar) sidebar.classList.remove('open');
+    if (backdrop) backdrop.classList.remove('active');
+    document.body.style.overflow = '';
 }
 
 // --- FILTERING ---
@@ -92,12 +159,28 @@ function setupFilters() {
     const inputs = ['make-select', 'model-select', 'trim-select', 'search-input', 'year-min', 'year-max', 'us-only', 'body-style'];
     inputs.forEach(id => {
         const el = document.getElementById(id);
+        if (!el) return;
         el.oninput = el.onchange = (e) => {
             if (id === 'make-select') updateModelSelect(e.target.value);
             if (id === 'model-select') updateTrimSelect(document.getElementById('make-select').value, e.target.value);
             applyFilters();
         };
     });
+}
+
+function setupResetFilters() {
+    const resetBtn = document.getElementById('reset-filters-btn');
+    if (!resetBtn) return;
+    resetBtn.onclick = () => {
+        document.getElementById('make-select').value = '';
+        updateModelSelect('');
+        document.getElementById('search-input').value = '';
+        document.getElementById('year-min').value = '';
+        document.getElementById('year-max').value = '';
+        document.getElementById('us-only').checked = false;
+        document.getElementById('body-style').value = '';
+        applyFilters();
+    };
 }
 
 function updateModelSelect(makeId) {
@@ -113,6 +196,11 @@ function updateModelSelect(makeId) {
     }
 
     const make = carIndex.find(m => m.i === makeId);
+    if (!make) {
+        modelS.disabled = true;
+        return;
+    }
+
     make.m.sort((a, b) => a.n.localeCompare(b.n)).forEach(model => {
         modelS.add(new Option(model.n, model.n));
     });
@@ -129,11 +217,39 @@ function updateTrimSelect(makeId, modelName) {
     }
 
     const make = carIndex.find(m => m.i === makeId);
+    if (!make) {
+        trimS.disabled = true;
+        return;
+    }
+
     const model = make.m.find(m => m.n === modelName);
+    if (!model) {
+        trimS.disabled = true;
+        return;
+    }
+
     model.t.sort((a, b) => b.y - a.y).forEach(trim => {
         trimS.add(new Option(`${trim.y} ${trim.t || 'Base'}`, trim.i));
     });
     trimS.disabled = false;
+}
+
+function updateActiveFilterBadge() {
+    let count = 0;
+    if (document.getElementById('make-select').value) count++;
+    if (document.getElementById('model-select').value) count++;
+    if (document.getElementById('trim-select').value) count++;
+    if (document.getElementById('search-input').value.trim()) count++;
+    if (document.getElementById('year-min').value) count++;
+    if (document.getElementById('year-max').value) count++;
+    if (document.getElementById('us-only').checked) count++;
+    if (document.getElementById('body-style').value) count++;
+
+    const badge = document.getElementById('active-filter-badge');
+    if (badge) {
+        badge.textContent = count;
+        badge.classList.toggle('hidden', count === 0);
+    }
 }
 
 function applyFilters() {
@@ -141,9 +257,10 @@ function applyFilters() {
         makeId: document.getElementById('make-select').value,
         modelName: document.getElementById('model-select').value,
         trimId: document.getElementById('trim-select').value,
-        keyword: document.getElementById('search-input').value.toLowerCase(),
+        keyword: document.getElementById('search-input').value.toLowerCase().trim(),
         yMin: parseInt(document.getElementById('year-min').value) || 0,
-        yMax: parseInt(document.getElementById('year-max').value) || 3000
+        yMax: parseInt(document.getElementById('year-max').value) || 3000,
+        bodyStyle: (document.getElementById('body-style').value || '').toLowerCase().trim()
     };
 
     filteredData = [];
@@ -157,6 +274,7 @@ function applyFilters() {
 
                 const fullName = `${make.n} ${model.n} ${trim.t || ''}`.toLowerCase();
                 if (criteria.keyword && !fullName.includes(criteria.keyword)) return;
+                if (criteria.bodyStyle && !fullName.includes(criteria.bodyStyle)) return;
 
                 filteredData.push({
                     makeId: make.i, makeName: make.n,
@@ -167,13 +285,16 @@ function applyFilters() {
         });
     });
 
+    updateActiveFilterBadge();
     renderCurrentView();
 }
 
 // --- RENDERERS ---
 function renderCurrentView() {
     const count = document.getElementById('result-count');
-    count.innerHTML = `Displaying <strong>${filteredData.length}</strong> of <strong>${TOTAL_SPECS}</strong> specifications`;
+    if (count) {
+        count.innerHTML = `Displaying <strong>${filteredData.length.toLocaleString()}</strong> of <strong>${TOTAL_SPECS.toLocaleString()}</strong> specifications`;
+    }
 
     if (currentView === 'grid-view') renderGrid();
     else if (currentView === 'list-view') renderTable();
@@ -183,6 +304,12 @@ function renderCurrentView() {
 function renderGrid() {
     const container = document.getElementById('car-grid');
     container.innerHTML = '';
+
+    if (filteredData.length === 0) {
+        container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 3rem 1rem; color: var(--text-gray);">No vehicle models match your selected filters.</div>';
+        return;
+    }
+
     filteredData.slice(0, 50).forEach(car => {
         const card = document.createElement('div');
         card.className = 'card';
@@ -200,6 +327,12 @@ function renderGrid() {
 function renderTable() {
     const body = document.getElementById('car-table-body');
     body.innerHTML = '';
+
+    if (filteredData.length === 0) {
+        body.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2.5rem; color: var(--text-gray);">No vehicle models match your selected filters.</td></tr>';
+        return;
+    }
+
     filteredData.slice(0, 100).forEach(car => {
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -207,7 +340,7 @@ function renderTable() {
             <td>${car.modelName}</td>
             <td><span class="card-badge">${car.year}</span></td>
             <td style="color:var(--text-gray)">${car.trimName}</td>
-            <td style="text-align:right"><button class="nav-btn" style="padding:0.3rem 0.6rem" onclick="showDetail('${car.makeId}', '${car.trimId}')">Specs</button></td>
+            <td style="text-align:right"><button class="nav-btn" style="padding:0.4rem 0.8rem; display:inline-flex; border-radius:6px;" onclick="showDetail('${car.makeId}', '${car.trimId}')">Specs</button></td>
         `;
         body.appendChild(row);
     });
@@ -216,6 +349,11 @@ function renderTable() {
 function renderTreeView() {
     const root = document.getElementById('tree-root');
     root.innerHTML = '';
+
+    if (filteredData.length === 0) {
+        root.innerHTML = '<div style="text-align: center; padding: 3rem 1rem; color: var(--text-gray);">No vehicle models match your selected filters.</div>';
+        return;
+    }
 
     // Group filtered data back into tree structure for high performance browsing
     const tree = {};
@@ -233,8 +371,8 @@ function renderTreeView() {
                     models[modelName].sort((a, b) => b.year - a.year).forEach(trim => {
                         const tNode = document.createElement('div');
                         tNode.className = 'tree-label';
-                        tNode.style.fontSize = '0.8rem';
-                        tNode.innerHTML = `○ ${trim.year} ${trim.trimName}`;
+                        tNode.style.fontSize = '0.82rem';
+                        tNode.innerHTML = `<span style="opacity:0.6">○</span> <span>${trim.year} ${trim.trimName}</span>`;
                         tNode.onclick = (e) => { e.stopPropagation(); showDetail(trim.makeId, trim.trimId); };
                         modelNode.container.appendChild(tNode);
                     });
@@ -271,14 +409,24 @@ async function showDetail(makeId, trimId) {
     toggleLoader(true);
     let details = detailsCache.get(makeId);
     if (!details) {
-        const res = await fetch(`./web_data/details/${makeId}.json`);
-        details = await res.json();
-        detailsCache.set(makeId, details);
+        try {
+            const res = await fetch(`./web_data/details/${makeId}.json`);
+            details = await res.json();
+            detailsCache.set(makeId, details);
+        } catch (err) {
+            console.error('Failed to load details', err);
+            toggleLoader(false);
+            return;
+        }
     }
     const car = details[trimId];
+    if (!car) {
+        toggleLoader(false);
+        return;
+    }
 
     // Header
-    document.getElementById('modal-title').textContent = `${car.model_year} ${car.make_display} ${car.model_name}`;
+    document.getElementById('modal-title').textContent = `${car.model_year || ''} ${car.make_display || ''} ${car.model_name || ''}`;
 
     const specsRoot = document.getElementById('specs-root');
     specsRoot.innerHTML = '';
@@ -318,10 +466,14 @@ async function showDetail(makeId, trimId) {
     });
 
     document.getElementById('detail-modal').classList.add('active');
+    document.body.style.overflow = 'hidden';
     lucide.createIcons();
     toggleLoader(false);
 }
 
-function toggleLoader(show) { document.getElementById('loading-overlay').classList.toggle('hidden', !show); }
+function toggleLoader(show) {
+    const el = document.getElementById('loading-overlay');
+    if (el) el.classList.toggle('hidden', !show);
+}
 
 init();

@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
     <title>CarData Explorer | Professional Database</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -12,9 +12,12 @@
 <body>
     <div id="loading-overlay" class="hidden"><span class="loader"></span></div>
 
+    <!-- Mobile Drawer Backdrop -->
+    <div id="sidebar-backdrop" class="sidebar-backdrop" aria-hidden="true"></div>
+
     <div id="layout">
-        <!-- Sidebar -->
-        <aside>
+        <!-- Sidebar Drawer -->
+        <aside id="sidebar">
             <div class="brand">
                 <div class="brand-wrapper">
                     <div class="brand-icon-container">
@@ -22,20 +25,30 @@
                     </div>
                     <h1>CarData Explorer</h1>
                 </div>
-                <button id="theme-btn" class="theme-toggle"><i data-lucide="moon" id="theme-icon"></i></button>
+                <div class="brand-actions">
+                    <button id="theme-btn" class="theme-toggle" aria-label="Toggle theme" title="Toggle theme">
+                        <i data-lucide="moon" class="theme-icon"></i>
+                    </button>
+                    <button id="sidebar-close-btn" class="sidebar-close-btn" aria-label="Close filter drawer">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
             </div>
 
             <div class="filter-section">
                 <!-- Simple Filtering Section -->
                 <div class="filter-group">
-                    <label>Simple Filtering</label>
-                    <select id="make-select">
+                    <div class="filter-group-header">
+                        <label>Simple Filtering</label>
+                        <button type="button" id="reset-filters-btn" class="reset-filters-btn">Reset</button>
+                    </div>
+                    <select id="make-select" aria-label="Select Manufacturer">
                         <option value="">All Manufacturers</option>
                     </select>
-                    <select id="model-select" disabled>
+                    <select id="model-select" disabled aria-label="Select Model">
                         <option value="">Select Manufacturer first</option>
                     </select>
-                    <select id="trim-select" disabled>
+                    <select id="trim-select" disabled aria-label="Select Trim">
                         <option value="">Select Model first</option>
                     </select>
                 </div>
@@ -44,35 +57,35 @@
 
                 <!-- Advanced Filtering Section -->
                 <div class="filter-group">
-                    <label>Keyword Search</label>
+                    <label for="search-input">Keyword Search</label>
                     <input type="text" id="search-input" placeholder="Search anything...">
                 </div>
 
                 <div class="filter-group">
                     <label>Release Year</label>
                     <div class="range-grid">
-                        <select id="year-min">
+                        <select id="year-min" aria-label="Minimum Year">
                             <option value="">Min</option>
                         </select>
-                        <select id="year-max">
+                        <select id="year-max" aria-label="Maximum Year">
                             <option value="">Max</option>
                         </select>
                     </div>
                 </div>
 
                 <div class="filter-group">
-                    <div class="switch-row" style="justify-content: flex-start; gap: 0.75rem;">
+                    <div class="switch-row">
                         <label class="switch">
                             <input type="checkbox" id="us-only">
                             <span class="slider"></span>
                         </label>
-                        <label class="switch-label">Show Only US Models</label>
+                        <label for="us-only" class="switch-label">Show Only US Models</label>
                     </div>
                 </div>
 
                 <!-- More Advanced Filters -->
                 <div class="filter-group">
-                    <label>Body Style</label>
+                    <label for="body-style">Body Style</label>
                     <select id="body-style">
                         <option value="">Any Body Style</option>
                         <option value="Sedan">Sedan</option>
@@ -88,7 +101,10 @@
             </div>
 
             <div class="sidebar-footer">
-                <nav class="nav-links">
+                <button id="apply-filters-btn" class="apply-filters-btn" type="button">
+                    <span>Show Results</span>
+                </button>
+                <nav class="nav-links" aria-label="Sidebar navigation">
                     <button class="nav-btn active" data-view="tree-view">
                         <i data-lucide="layers" class="nav-icon"></i>
                         <span>Tree Browser</span>
@@ -102,7 +118,8 @@
                         <span>Data Table</span>
                     </button>
                 </nav>
-                <a href="https://github.com/imamhossain94/cardata-explorer" class="github-btn" target="_blank">
+                <a href="https://github.com/imamhossain94/cardata-explorer" class="github-btn" target="_blank" rel="noopener">
+                    <i data-lucide="github" class="nav-icon"></i>
                     <span>GitHub Repository</span>
                 </a>
             </div>
@@ -111,8 +128,38 @@
         <!-- Main Content Area -->
         <main>
             <header class="main-header">
-                <h2>Universal Database</h2>
-                <p id="result-count">Initializing engine...</p>
+                <div class="header-top-row">
+                    <div class="header-title-area">
+                        <button id="mobile-filter-btn" class="mobile-filter-btn" aria-label="Open Filters">
+                            <i data-lucide="sliders-horizontal" class="filter-icon"></i>
+                            <span class="filter-text">Filters</span>
+                            <span id="active-filter-badge" class="filter-badge hidden">0</span>
+                        </button>
+                        <div class="title-meta">
+                            <h2>Universal Database</h2>
+                            <p id="result-count">Initializing engine...</p>
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <div class="view-segmented-control" role="group" aria-label="View selection">
+                            <button class="nav-btn active" data-view="tree-view" title="Tree Browser" aria-label="Tree Browser">
+                                <i data-lucide="layers" class="nav-icon"></i>
+                                <span class="segmented-label">Tree</span>
+                            </button>
+                            <button class="nav-btn" data-view="grid-view" title="Card Explorer" aria-label="Card Explorer">
+                                <i data-lucide="layout-grid" class="nav-icon"></i>
+                                <span class="segmented-label">Cards</span>
+                            </button>
+                            <button class="nav-btn" data-view="list-view" title="Data Table" aria-label="Data Table">
+                                <i data-lucide="table" class="nav-icon"></i>
+                                <span class="segmented-label">Table</span>
+                            </button>
+                        </div>
+                        <button id="header-theme-btn" class="theme-toggle header-theme-btn" aria-label="Toggle theme" title="Toggle theme">
+                            <i data-lucide="moon" class="theme-icon"></i>
+                        </button>
+                    </div>
+                </div>
             </header>
 
             <div class="content-body">
@@ -148,12 +195,12 @@
     <!-- Modal -->
     <div id="detail-modal" class="modal-overlay">
         <div class="modal-content">
-            <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:2rem;">
+            <div class="modal-header">
                 <div>
                     <span class="card-badge">Specifications</span>
-                    <h2 id="modal-title" style="font-size:2rem; margin-top:0.5rem;">Car Details</h2>
+                    <h2 id="modal-title">Car Details</h2>
                 </div>
-                <button id="close-modal" class="close-modal-btn"><i data-lucide="x"></i></button>
+                <button id="close-modal" class="close-modal-btn" aria-label="Close modal"><i data-lucide="x"></i></button>
             </div>
             <div id="specs-root" class="specs-grid"></div>
         </div>
